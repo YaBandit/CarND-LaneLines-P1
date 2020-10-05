@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import cv2
-import math
+
+show_stages = False
 
 
 def grayscale(img):
@@ -46,8 +47,8 @@ def region_of_interest(img, vertices):
     return masked_image
 
 
-def make_points(image, average):
-    slope, yint = average
+def make_points(image, avg):
+    slope, yint = avg
     y1 = image.shape[0]
     y2 = int(y1 * (3/5))
 
@@ -63,7 +64,6 @@ def average(image, lines):
     left = []
     right = []
     for line in lines:
-        print(line)
         x1, y1, x2, y2 = line.reshape(4)
         parameters = np.polyfit((x1, x2), (y1, y2), 1)
         slope = parameters[0]
@@ -75,8 +75,20 @@ def average(image, lines):
 
     right_avg = np.average(right, axis=0)
     left_avg = np.average(left, axis=0)
-    left_line = make_points(image, left_avg)
-    right_line = make_points(image, right_avg)
+
+    left_line = None
+    if not np.isnan(np.min(left_avg)):
+        left_line = make_points(image, left_avg)
+
+    right_line = None
+    if not np.isnan(np.min(right_avg)):
+        right_line = make_points(image, right_avg)
+
+    #left_line = make_points(image, left_avg)
+    #right_line = make_points(image, right_avg)
+
+    #right_line = make_points(image, right_avg) if not np.any.isnan(right_avg) else None
+
     return np.array([left_line, right_line])
 
 
@@ -84,8 +96,9 @@ def display_lines(img, lines):
     lines_image = np.zeros_like(img)
     if lines is not None:
         for line in lines:
-            x1, y1, x2, y2 = line
-            cv2.line(lines_image, (x1, y1), (x2, y2), (255, 0, 0), 10)
+            if line is not None:
+                x1, y1, x2, y2 = line
+                cv2.line(lines_image, (x1, y1), (x2, y2), (255, 0, 0), 10)
     return lines_image
 
 
@@ -110,6 +123,8 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
                             maxLineGap=max_line_gap)
     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
 
+    #plot(lines)
+
     return draw_lines(line_img, lines)
 
 
@@ -128,25 +143,53 @@ def weighted_img(img, initial_img, α=0.8, β=1., γ=0.):
     return cv2.addWeighted(initial_img, α, img, β, γ)
 
 
-def process_img(image):
-    grey = grayscale(image)
-    blurred = gaussian_blur(grey, 5)
-    canny_img = canny(blurred, 50, 150)
+def plot(image):
+    if show_stages:
+        plt.imshow(image, cmap='gray')  # Remove CMAP to see it in Green
+        plt.show()
 
-    imshape = image.shape
-    vertices = np.array([[(0, imshape[0]), (450, 290), (490, 290), (imshape[1], imshape[0])]], dtype=np.int32)
+
+def process_img(image, vertices):
+
+    grey = grayscale(image)
+    plot(grey)
+
+    blurred = gaussian_blur(grey, 5)
+    plot(blurred)
+
+    canny_img = canny(blurred, 50, 150)
+    plot(canny_img)
+
+    # imshape = image.shape
+    # vertices = np.array([[(0, imshape[0]), (450, 290), (490, 290), (imshape[1], imshape[0])]], dtype=np.int32)
 
     region = region_of_interest(canny_img, vertices)
+    plot(region)
+
+    # rho = 1  # distance resolution in pixels of the Hough grid
+    # theta = np.pi / 180  # angular resolution in radians of the Hough grid
+    # threshold = 5  # minimum number of votes (intersections in Hough grid cell)=
+    # min_line_length = 40  # minimum number of pixels making up a line
+    # max_line_gap = 5  # maximum gap in pixels between connectable line segments
 
     rho = 1  # distance resolution in pixels of the Hough grid
     theta = np.pi / 180  # angular resolution in radians of the Hough grid
     threshold = 5  # minimum number of votes (intersections in Hough grid cell)=
-    min_line_length = 40  # minimum number of pixels making up a line
+    min_line_length = 20  # minimum number of pixels making up a line
     max_line_gap = 5  # maximum gap in pixels between connectable line segments
 
     lines = hough_lines(region, rho, theta, threshold, min_line_length, max_line_gap)
+    plot(lines)
 
     res = weighted_img(lines, image) # Original image with lines added
+    plot(res)
+
+    return res
+
+
+def process_and_show_img(image, vertices):
+
+    res = process_img(image, vertices)
 
     plt.imshow(res, cmap='gray') # Remove CMAP to see it in Green
     plt.show()
@@ -156,11 +199,87 @@ def process_img(image):
 
 # PART 1 - Find & draw the lanes on the test images
 
-image1 = mpimg.imread('..\\test_images\\solidWhiteCurve.jpg')
-image2 = mpimg.imread('..\\test_images\\solidYellowCurve.jpg')
+def run_still_images():
+    image1 = mpimg.imread('..\\test_images\\solidWhiteCurve.jpg')
+    image2 = mpimg.imread('..\\test_images\\solidWhiteRight.jpg')
+    image3 = mpimg.imread('..\\test_images\\solidYellowCurve.jpg')
+    image4 = mpimg.imread('..\\test_images\\solidYellowCurve2.jpg')
+    image5 = mpimg.imread('..\\test_images\\solidYellowLeft.jpg')
+    image6 = mpimg.imread('..\\test_images\\whiteCarLaneSwitch.jpg')
 
-process_img(image1)
-process_img(image1)
+    imshape = image1.shape
+    vertices = np.array([[(0, imshape[0]), (450, 290), (490, 290), (imshape[1], imshape[0])]], dtype=np.int32)
+
+    process_and_show_img(image1, vertices)
+    process_and_show_img(image2, vertices)
+    process_and_show_img(image3, vertices)
+    process_and_show_img(image4, vertices)
+    process_and_show_img(image5, vertices)
+    process_and_show_img(image6, vertices)
+
+
+
+#run_still_images()
+
+
 
 
 # PART 2 - Apply your pipeline to Example Files
+
+# image7 = mpimg.imread('..\\solution\\image6.jpg')
+# imshape_vid = image7.shape
+# y_max = 459
+# y_min = 634
+# vertices_vid = np.array([[(200, y_min), (550, y_max), (720, y_max), (1200, y_min)]], dtype=np.int32)
+#
+# process_and_show_img(image7, vertices_vid)
+
+video = cv2.VideoCapture('..\\test_videos\\challenge.mp4')
+
+
+def getFrame(sec, vertices):
+    video.set(cv2.CAP_PROP_POS_MSEC,sec*1000)
+    has_frames, image = video.read()
+
+    if has_frames:
+
+        # ORIGINALS
+        #cv2.imwrite("image"+str(count)+".jpg", image)     # save frame as JPG file
+        #vid_images.append(image)
+
+        ## CONVERTED
+        line_img = process_img(image, vertices)
+        #cv2.imwrite("image" + str(count) + ".jpg", line_img)  # save frame as JPG file
+        vid_images.append(line_img)
+
+    return has_frames
+
+
+sec = 0
+frameRate = 0.05  # it will capture image in each 0.5 second
+count = 1
+vid_images = []
+
+y_max = 459
+y_min = 634
+vertices_vid = np.array([[(200, y_min), (550, y_max), (720, y_max), (1200, y_min)]], dtype=np.int32)
+
+success = getFrame(sec, vertices_vid)
+
+while success:
+    count = count + 1
+    sec = sec + frameRate
+    sec = round(sec, 2)
+    success = getFrame(sec, vertices_vid)
+
+# Output Video
+
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+fps = 20
+out = cv2.VideoWriter('output.avi', fourcc, fps, (1280, 720))
+
+for i in range(len(vid_images)):
+    out.write(vid_images[i])
+out.release()
+
+print("Finish")
